@@ -7,3 +7,5 @@ export interface Order {
     quantity : number;
 }
 
+
+export type SortFunc = (a :Order , b:Order) => number

@@ -1,21 +1,68 @@
-import { Order } from "./order";
+import { Order, SortFunc } from "./order";
 import { EventEmitter } from "events";
-
+import { sendRemoveOrderEventsToAllClient } from "./sse-events/orders.events";
+import { readLog } from "./utils/logging.util";
+import { Logger } from "./logger";
+import { TradeEngine } from "./trade";
+import { v4 as uuidv4 } from "uuid";
 export class OrderBook extends EventEmitter {
     bids : Order[] = [];
     asks : Order[] = [];
+
+    constructor() { 
+        super()
+        this.bootstrapOrders()
+    }
+    async bootstrapOrders() {
+        const orders = await readLog()
+        for(let o of orders) { 
+            const order: Order = JSON.parse(o)
+            console.log(order)
+            if(order.side == "buy") {
+            
+                if(this.bids.length == 0) { 
+                    this.bids.push(order)
+                } 
+                for (let bid of this.bids) { 
+                    if(bid.userId != order.userId ||  bid.side != "buy") {
+                        this.bids.push(order)
+                    }
+                }
+            } else if(order.side == "sell") {
+                if(this.asks.length == 0) { 
+                    this.asks.push(order)
+                } 
+                for (let ask of this.asks) { 
+                    if(ask.userId != order.userId || ask.side != "sell") {
+                        this.asks.push(order)
+                    }
+                }     
+            }
+        }
+        console.log("bids " + this.bids)
+        console.log("asks " + this.asks)
+    }
+    sortOrder(sortFunc : SortFunc, side : string) { 
+        if ( side == "bids" ) { 
+            this.bids.sort(sortFunc)
+            return
+        }
+        this.asks.sort(sortFunc)
+        return
+    }
+
     public async PlaceOrder(order : Order) : Promise<boolean> {
         if(order.side == "buy") {
             this.bids.push(order)
-            this.bids.sort((a, b)=> b.price - a.price)
+            this.sortOrder((a:Order, b: Order) => b.price - a.price, "bids")
         } else {
             this.asks.push(order)
-            this.asks.sort((a, b) => a.price - b.price)
+            this.sortOrder((a:Order, b: Order) => a.price - b.price, "asks")
         }
         this.emit("OrderPlaced", order)
         return true
     }
-
+    
     public async ExecuteOrder()  {
         if(this.bids.length < this.asks.length) { 
             for(let i = 0; i < this.bids.length; i++) {
@@ -36,6 +83,8 @@ export class OrderBook extends EventEmitter {
                             const newBid = this.bids[i]
                             this.emit("Executed", newBid)
                         }
+                        sendRemoveOrderEventsToAllClient(bid.orderId)
+                        sendRemoveOrderEventsToAllClient(ask.orderId)
                     }
                  }
             }
@@ -58,6 +107,8 @@ export class OrderBook extends EventEmitter {
                             const newBid = this.bids[j]
                             this.emit("Executed", newBid)
                         }
+                        sendRemoveOrderEventsToAllClient(bid.orderId)
+                        sendRemoveOrderEventsToAllClient(ask.orderId)
                     }
                  }
             }
@@ -102,3 +153,5 @@ export class OrderBook extends EventEmitter {
         return this.asks.find(ask => ask.orderId == orderId && ask.userId == userId)
     }
 }
+
+

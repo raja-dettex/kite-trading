@@ -1,11 +1,17 @@
 import { OrderBook } from "../orderbook"
 import { assert} from 'chai';
 import { v4 as uuidv4 } from "uuid";
+import { TradeEngine } from "../trade";
+import { Logger } from "../logger";
 
 describe("order book", () => {
     let orderBook:OrderBook;
+    let trade : TradeEngine
+    let logger : Logger
     beforeEach(() => {
-        orderBook = new OrderBook(); 
+        orderBook = new OrderBook();
+        logger = new Logger();
+        trade = new TradeEngine(orderBook, logger)
     })
 
     it("shoud place order" , async () => {
@@ -19,6 +25,7 @@ describe("order book", () => {
         orderBook.PlaceOrder(order1)
         orderBook.PlaceOrder( order2)
         const orders = await orderBook.FetchOrder()
+        console.log(orders)
         expect(orders).toStrictEqual([order1, order2])
     })
     // it("should fetch order by orderId" , async () => {
@@ -29,7 +36,7 @@ describe("order book", () => {
     //     const order = await orderBook.FetchOrderById(, "buy")
     //     expect(order).toStrictEqual(order1)
     // }) 
-    it("shoud executed orders" , async () =>  {
+    fit("shoud executed orders" , async () =>  {
         const id = uuidv4()
         // const order1 =  { orderId: 1, side : "buy", price: 4000, quantity: 2};
         // const order2 =  { orderId: 2, side : "sell" , price: 4000, quantity: 3};

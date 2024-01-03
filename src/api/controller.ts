@@ -4,22 +4,30 @@ import { orderBook } from "..";
 import { Order } from "../order";
 import { v4 as uuidv4 } from "uuid";
 import { Logger } from "../logger";
-import { fetchOrderClients, FetchOrderClient, sendOrderEventToAllClient} from './../sse-events/orders.events'
+import {FetchOrderClient, sendOrderEventToAllClient, sendRemoveOrderEventsToAllClient} from './../sse-events/orders.events'
+import { AddOrderMessage, RemoveOrderMessage } from "../messages/message.type";
 const logger = new Logger();
+
+
+export let fetchOrderClients: FetchOrderClient[] = [];
 
 
 export const fetchAllOrdersEvent = async (req: Request, res: Response) => {
     const headers = {
         'Content-Type': 'text/event-stream',
         'Connection': 'keep-alive',
-        'Cache-Control': 'no-cache'
+        'Cache-Control': 'no-cache',
+        'Access-Control-Allow-Origin' : '*'
     };
     res.writeHead(200, headers);
     try { 
         const orders = await orderBook.FetchOrder()
         console.log(orders)
         console.log(JSON.stringify(orders))
-        res.write(`${JSON.stringify(orders)}\n\n`)
+        orders.forEach(order =>  {
+            const message: AddOrderMessage = { message : "add", payload: order}
+            res.write(`data: ${JSON.stringify(message)}\n\n`)
+        })
         // orders.forEach(order => {
         //     res.write(`${JSON.stringify(orders)}\n\n`)
         // })
@@ -28,7 +36,7 @@ export const fetchAllOrdersEvent = async (req: Request, res: Response) => {
         fetchOrderClients.push(client)
         req.on("close", ()=>  {
             logger.INFO("closing the connection of client ")
-            fetchOrderClients.filter(client => client.clientId != clientId)
+            fetchOrderClients =  fetchOrderClients.filter(client => client.clientId != clientId)
         })
     } catch(err: any) {
         logger.INFO("error : "  + err)
@@ -46,7 +54,7 @@ export const cancelOrder = async (req: Request, res: Response) => {
     try{
         const isCancelled = await orderBook.CancelOrder(orderId, side, userId)
         res.status(201).json({message : isCancelled})
-        return
+        return sendRemoveOrderEventsToAllClient(orderId)
     }catch(err :any) {
         res.status(400).json({message: err})
         return
